@@ -1,4 +1,9 @@
+import cProfile
+import queue
+
+import random
 from typing import Optional
+import time
 
 from z3 import *
 
@@ -72,12 +77,13 @@ class DAG:
         return conf
 
     def check_conflict(self, start, dest, type):
-        # Reachability test with BFS
-        reachable = []  # aka visited nodes
-        investigate = [start]
+        # Reachability test with DFS
+        reachable = set()  # aka visited nodes
+        investigate = queue.Queue()
+        investigate.put(start)
         parent = {}  # to_node -> (from_node, "edge"/"eq") aka the way we got there
-        while len(investigate) != 0:
-            curr_node = investigate.pop(-1)
+        while not investigate.empty():
+            curr_node = investigate.get()
 
             # If reached, that is a conflict
             if curr_node == dest:
@@ -104,8 +110,8 @@ class DAG:
             if eq_val is not None:
                 for n, v in self.eq.items():
                     if v == eq_val and n not in reachable:
-                        reachable.append(n)
-                        investigate.append(n)
+                        reachable.add(n)
+                        investigate.put(n)
                         parent[n] = (curr_node, "eq")
                 out_edges = self.graph[f"eq_{eq_val}"]
             else:
@@ -115,8 +121,8 @@ class DAG:
             for e in out_edges:
                 n_s, n_d = e
                 if n_d not in reachable:
-                    reachable.append(n_d)
-                    investigate.append(n_d)
+                    reachable.add(n_d)
+                    investigate.put(n_d)
                     parent[n_d] = (n_s, "edge")
 
         return None
@@ -257,7 +263,7 @@ class UserPropagate(UserPropagateBase):
         # Report conflicts, possibly regarding this very change. May be delayed until final call though.
         if conflict is not None:
             normalized = self.normalize_conflict(conflict)
-            self.print_conflict(normalized)
+            # self.print_conflict(normalized) DEBUG
             # Deps are any term that is fixed, eqs are pairs of terms that are equal
             self.conflict(
                 deps=normalized[0],
@@ -280,7 +286,7 @@ class UserPropagate(UserPropagateBase):
         # Report conflicts, possibly regarding this very change. May be delayed until final call though.
         if conflict is not None:
             normalized = self.normalize_conflict(conflict)
-            self.print_conflict(normalized)
+            # self.print_conflict(normalized) DEBUG
             # Deps are any term that is fixed, eqs are pairs of terms that are equal
             self.conflict(
                 deps=normalized[0],
@@ -305,50 +311,148 @@ class UserPropagate(UserPropagateBase):
             print('-', c1, '==', c2)
 
 
-# How to use:
+# # How to use:
+#
+# NodeSort, N = EnumSort('NodeSort', ['N0', 'N1', 'N2', 'N3'])
+# # N0, N1, N2, N3 = N
+#
+# # 1. Create a relation with PropagateFunction. Only such term will be 'created' in any single UserPropagator.
+# relation = PropagateFunction("R", NodeSort, NodeSort, BoolSort())
+#
+# # 2. Create variables
+# # We use functions here, which are basically variables such that
+# # they come from the NodeSort set,
+# # so we can express the relation on them,
+# # and also equalities (because we don't know which is which)
+# X = Bool('X')
+# F0 = Function('F0', (BoolSort()), NodeSort)
+# F1 = Function('F1', (BoolSort()), NodeSort)
+# F2 = Function('F2', (BoolSort()), NodeSort)
+# F3 = Function('F3', (BoolSort()), NodeSort)
+#
+# # 3. Create solver
+# s = SimpleSolver()
+#
+# # 4. Create assertions
+# # Any knowledge regarding the relation is useful,
+# # negative edges are not directly tracked by the UserPropagator,
+# # as they never cause conflicts.
+# # However, the base solver may still need to know them.
+# known_pos_edges = [
+#     (F0(X), F1(X)),
+#     (F1(X), F2(X)),
+#     (F3(X), F0(X)),
+# ]
+# known_neg_edges = []
+# for a, b in known_pos_edges:
+#     s.add(relation(a, b))
+# for a, b in known_neg_edges:
+#     s.add(Not(relation(a, b)))
+# s.add(Or(F3(X) == F2(X), F3(X) == F1(X)))
+#
+# # 5. Create one propagator per relation
+# p = UserPropagate(s, relation=relation)
+#
+# # 6. Run the solver
+# result = s.check()
+# print(result)
+# if result == 'sat':
+#     print(s.model())
 
-NodeSort, N = EnumSort('NodeSort', ['N0', 'N1', 'N2', 'N3'])
-# N0, N1, N2, N3 = N
 
-# 1. Create a relation with PropagateFunction. Only such term will be 'created' in any single UserPropagator.
-relation = PropagateFunction("R", NodeSort, NodeSort, BoolSort())
+########################################################################################################################
 
-# 2. Create variables
-# We use functions here, which are basically variables such that
-# they come from the NodeSort set,
-# so we can express the relation on them,
-# and also equalities (because we don't know which is which)
-X = Bool('X')
-F0 = Function('F0', (BoolSort()), NodeSort)
-F1 = Function('F1', (BoolSort()), NodeSort)
-F2 = Function('F2', (BoolSort()), NodeSort)
-F3 = Function('F3', (BoolSort()), NodeSort)
+class RandomGraph:
 
-# 3. Create solver
-s = SimpleSolver()
+    def __init__(self, num_nodes, edge_probability, relation_name='R'):
+        self.relation_name = relation_name
+        self.graph = {}
+        for i in range(num_nodes):
+            neighbours = set()
+            for j in range(num_nodes):
+                if random.random() < edge_probability:
+                    neighbours |= {f"node_{j}"}
+            self.graph[f"node_{i}"] = neighbours
 
-# 4. Create assertions
-# Any knowledge regarding the relation is useful,
-# negative edges are not directly tracked by the UserPropagator,
-# as they never cause conflicts.
-# However, the base solver may still need to know them.
-known_pos_edges = [
-    (F0(X), F1(X)),
-    (F1(X), F2(X)),
-    (F3(X), F0(X)),
-]
-known_neg_edges = []
-for a, b in known_pos_edges:
-    s.add(relation(a, b))
-for a, b in known_neg_edges:
-    s.add(Not(relation(a, b)))
-s.add(Or(F3(X) == F2(X), F3(X) == F1(X)))
+    def as_assertions(self, solver, ctx):
+        NodeSort, all_nodes = EnumSort(self.relation_name + 'sort', list(self.graph.keys()), ctx=ctx)
+        node_mapping = dict(zip(self.graph.keys(), all_nodes))
+        R = Function(self.relation_name, NodeSort, NodeSort, BoolSort(ctx=ctx))
+        for key in self.graph.keys():
+            for value in self.graph[key]:
+                solver.add(R(node_mapping[key], node_mapping[value]))
 
-# 5. Create one propagator per relation
-p = UserPropagate(s, relation=relation)
+        f = Function('f', NodeSort, NodeSort, IntSort(ctx=ctx))
+        X = Const('X', NodeSort)
+        Y = Const('Y', NodeSort)
+        Z = Const('Z', NodeSort)
+        solver.add(ForAll([X, Y, Z], Implies(And(R(X, Y), R(Y, Z)), f(X, Y) < f(Y, Z))))
 
-# 6. Run the solver
-result = s.check()
-print(result)
-if result == 'sat':
-    print(s.model())
+    def as_user_propagator(self, solver, ctx):
+        NodeSort, all_nodes = EnumSort(self.relation_name + 'sort', list(self.graph.keys()), ctx=ctx)
+        node_mapping = dict(zip(self.graph.keys(), all_nodes))
+        R = PropagateFunction(self.relation_name, NodeSort, NodeSort, BoolSort(ctx=ctx))
+        for key in self.graph.keys():
+            for value in self.graph[key]:
+                solver.add(R(node_mapping[key], node_mapping[value]))
+
+        p = UserPropagate(solver, relation=R)
+
+
+def print(*args, **kwargs):
+    pass
+
+
+results = {}
+for num_nodes in [500]:
+    for edge_probability in [0.01]:
+        for i in range(3):
+            g = RandomGraph(num_nodes, edge_probability)
+            for type in 'assertions', 'user_propagator':
+                profiler = cProfile.Profile()
+                profiler.enable()
+
+                builtins.print(
+                    f'{f"num_nodes={num_nodes}, edge_probability={edge_probability}, i={i}, type={type}":80}',
+                    end='\t',
+                )
+                lengths = []
+                for j in range(10):  # DEBUG 3
+
+                    ctx = Context()
+                    s = SimpleSolver(ctx=ctx)
+                    if type == 'assertions':
+                        g.as_assertions(s, ctx)
+                    else:
+                        g.as_user_propagator(s, ctx)
+                    start = time.time()
+                    result = s.check()
+                    end = time.time()
+                    length = end - start
+                    lengths.append(length)
+
+                avg_length = sum(lengths) / len(lengths)
+                builtins.print(result, avg_length)
+
+                # Measure execution time
+                results[(num_nodes, edge_probability, i, type)] = (avg_length, result)
+
+                profiler.disable()
+                profiler.print_stats(sort='tottime')
+
+                # if results[(num_nodes, edge_probability, i, 'assertions')][1] == results[
+                #     (num_nodes, edge_probability, i, 'user_propagator')][1]:
+                #     builtins.print('same', end='\t')
+                # else:
+                #     builtins.print('different', end='\t')
+                # if results[(num_nodes, edge_probability, i, 'assertions')][0] < results[
+                #     (num_nodes, edge_probability, i, 'user_propagator')][0]:
+                #     builtins.print(':)')
+                # else:
+                #     builtins.print(':(')
+
+# save as csv
+with open('results.csv', 'w') as f:
+    f.write('num_nodes,edge_probability,i,type,length,result\n')
+    for key, value in results.items():
+        f.write(','.join(map(str, key + value)) + '\n')
