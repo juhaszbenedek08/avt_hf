@@ -104,6 +104,7 @@ the UserPropagator API is faster.
 ![nodes.png](nodes.png)
 
 The same can be said about the number of nodes.
+Note that with the increased number of edges in a given graph, the unsatisfiability of the graph is more likely.
 
 ### Test set 3: SAT problems
 
