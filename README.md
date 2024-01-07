@@ -98,13 +98,14 @@ This is because there is a general overhead in the UserPropagator API, that scal
 Obviously, if the problem is simple, this overhead is more significant.
 When the edge probability is high, the graph is dense, and the SAT solver cannot easily find a topological ordering, so
 the UserPropagator API is faster.
+Note that with the increased number of edges in a given graph, the unsatisfiability of the graph is more likely.
 
 ### Test set 2: Fix edge probabilities, varying node numbers
 
 ![nodes.png](nodes.png)
 
 The same can be said about the number of nodes.
-Note that with the increased number of edges in a given graph, the unsatisfiability of the graph is more likely.
+Note that with the increased number of nodes in a given graph, the unsatisfiability of the graph is more likely.
 
 ### Test set 3: SAT problems
 
