@@ -81,18 +81,52 @@ assigned to the source node is smaller than the number assigned to the target no
 
 ### Test set 1: Fix nodes, varying edge probabilities
 
+![edges.png](edges.png)
+
+When the edge probability is low, the graph is sparse, and the SAT solver can easily find a topological ordering, so the
+UserPropagator API is slower.
+This is because there is a general overhead in the UserPropagator API, that scales with the number of terms registered.
+Obviously, if the problem is simple, this overhead is more significant.
+When the edge probability is high, the graph is dense, and the SAT solver cannot easily find a topological ordering, so
+the UserPropagator API is faster.
+
 ### Test set 2: Fix edge probabilities, varying node numbers
 
+![nodes.png](nodes.png)
+
+The same can be said about the number of nodes.
+
 ### Test set 3: SAT problems
+
+![sat.png](sat.png)
+
+We compared the effect of being satisfiable or unsatisfiable on the performance of the UserPropagator API.
+The problems we addressed in the first two test sets were unsatisfiable, because they had many edges and nodes,
+and as we saw, the UserPropagator API is slower in these cases.
+However, the UserPropagator is consistent in speed regardless of the satisfiability of the problem, while the SAT solver
+is significantly slower on satisfiable problems.
+This is because for proving satisfiability, the SAT solver has to come up with a topological ordering as well, not only
+finding a contradictive cycle.
 
 ## Conclusion
 
 During testing, we found that the UserProgagator API is slow compared to the standard SMT solution, when it comes to
 registering terms. That is, only with complex constraints can it be faster than the standard solution.
-However, this is expected from the problems we need to encounter in real life formal verification, so we think this tool
-is useful.
+We found that our solution scales better with graph complexity, making it better suited for real life formal
+verification tasks.
+
+## Ideas to improve the solution
+
+- Implement the 'fresh' method: the current UserPropagator does not support threading.
+- Reduce memory usage: the current UserPropagator uses memento pattern to restore state.
+- Adjustable conflict finding: implement a way for the user to adjust how frequent the conflict finding algorithm is
+  called.
+- Return multiple found cycles.
+- Propgate lemmas: during traversing the graph, come up with lemmas that can be propagated to the solver.
+- Implement in C++: reduces API calling overhead, increases general computation efficiency (may be multithreaded).
 
 ## References
+
 
 - [Reference problem](https://dl.acm.org/doi/pdf/10.1145/3563292)
 - [Z3 UserPropagator API tutorial](https://microsoft.github.io/z3guide/programming/Example%20Programs/User%20Propagator/)
