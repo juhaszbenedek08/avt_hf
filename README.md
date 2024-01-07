@@ -52,11 +52,20 @@ A short example usage can be found in our solution file under 'example'.
 
 The cycle finding algorithm is implemented in two ways.
 
-The first algorithm can find a path between two nodes, and given that there is an edge between the last and the first
-node, it can find a cycle. It is based on the BFS algorithm.
+The first algorithm can find a path between two nodes. It is based on the BFS algorithm.
+This is a useful algorithm when only one change occurs in the graph. If that is a new edge, then we run the algorithm
+once from the end node to the start node, and if it finds a path, then we have a cycle.
+If there is a new equality between two nodes, then we run the algorithm twice, once from the first node to the second
+node, and once from the second node to the first node, and if any runs find a path, then we have a cycle.
 
 The second algorithm can find any cycle in a graph, which runs longer, but if called fewer times, it can be faster. It
-creates a topological ordering of the nodes, therefore proving that there is no cycle in the graph.
+creates a topological ordering of the nodes, therefore proving that there is no cycle in the graph. It leverages the
+idea that if there no cycle in the graph, then there is a node that has no incoming edges. We can attempt to find and
+remove this node from the graph without changing this property, until there are no nodes. However, if no such node
+exists, then there is a cycle in the graph.
+Then, to find a cycle, we need to remove even more nodes from the graph, the ones which have no outgoing edges.
+Since they can never be part of a cycle. In the end, if we start a random walk from any
+node, eventually we will find a node already on the path. This is the cycle.
 
 Our data structure keeps track of merged (equated) nodes. The algorithm operated on fictive merged nodes, and when it
 finds a cycle, it needs to be normalized back to the original nodes, by substituting the merged nodes with the original
@@ -122,11 +131,11 @@ verification tasks.
 - Adjustable conflict finding: implement a way for the user to adjust how frequent the conflict finding algorithm is
   called.
 - Return multiple found cycles.
-- Propgate lemmas: during traversing the graph, come up with lemmas that can be propagated to the solver.
+- Propagate lemmas: during traversing the graph, come up with lemmas that can be propagated to the solver.
 - Implement in C++: reduces API calling overhead, increases general computation efficiency (may be multithreaded).
+- We could have used a simpler BFS algorithm in the second conflict finding algorithm.
 
 ## References
-
 
 - [Reference problem](https://dl.acm.org/doi/pdf/10.1145/3563292)
 - [Z3 UserPropagator API tutorial](https://microsoft.github.io/z3guide/programming/Example%20Programs/User%20Propagator/)
